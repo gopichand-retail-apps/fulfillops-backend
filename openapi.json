@@ -1,0 +1,687 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FulfillOps API",
+    "version": "0.1.0",
+    "description": "Loopback-only warehouse fulfillment API using synthetic orders and in-memory state."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:5202/api/v1",
+      "description": "Local development API"
+    }
+  ],
+  "tags": [
+    { "name": "Health" },
+    { "name": "Profiles" },
+    { "name": "Orders" },
+    { "name": "Returns" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Service is available.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HealthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/version": {
+      "get": {
+        "tags": ["Health"],
+        "operationId": "getApplicationVersion",
+        "summary": "Read the backend artifact version",
+        "responses": {
+          "200": {
+            "description": "API service and SemVer release from the package manifest.",
+            "headers": {
+              "Cache-Control": {
+                "schema": { "type": "string", "const": "no-store" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data", "requestId"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": ["service", "version"],
+                      "properties": {
+                        "service": {
+                          "type": "string",
+                          "const": "fulfillops-api"
+                        },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                        }
+                      }
+                    },
+                    "requestId": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/profiles": {
+      "get": {
+        "tags": ["Profiles"],
+        "operationId": "listSyntheticProfiles",
+        "description": "Development and test only. Does not provide real authentication.",
+        "responses": {
+          "200": {
+            "description": "Available synthetic warehouse profiles.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ProfileListResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/auth/session": {
+      "post": {
+        "tags": ["Profiles"],
+        "operationId": "createSyntheticSession",
+        "description": "Development and test only. The profile ID is validated by the API; the opaque session is held in memory and expires after eight hours.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateSessionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Synthetic session created.",
+            "headers": {
+              "Set-Cookie": {
+                "description": "HttpOnly, SameSite=Lax session cookie. The raw token is not returned in JSON.",
+                "schema": { "type": "string" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SessionResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Profiles"],
+        "operationId": "endSyntheticSession",
+        "security": [{ "sessionCookie": [] }],
+        "responses": {
+          "201": {
+            "description": "Synthetic session revoked and cookie expired.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LogoutResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/summary": {
+      "get": {
+        "tags": ["Orders"],
+        "operationId": "getWorkflowSummary",
+        "responses": {
+          "200": {
+            "description": "Current seeded warehouse summary.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SummaryResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "tags": ["Orders"],
+        "operationId": "listOrders",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                { "$ref": "#/components/schemas/OrderStatus" },
+                { "const": "all" }
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 80 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Orders matching the bounded filters.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OrderListResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "tags": ["Orders"],
+        "operationId": "getOrder",
+        "parameters": [{ "$ref": "#/components/parameters/OrderId" }],
+        "responses": {
+          "200": {
+            "description": "One seeded order.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OrderResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/returns": {
+      "get": {
+        "tags": ["Returns"],
+        "operationId": "listReturns",
+        "responses": {
+          "200": {
+            "description": "Orders in returned state.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OrderListResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}/actions": {
+      "post": {
+        "tags": ["Orders"],
+        "operationId": "performOrderAction",
+        "security": [{ "sessionCookie": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/OrderId" },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/OrderAction" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Order transition committed.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WorkflowResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "fulfillops_session",
+        "description": "Opaque, HttpOnly local synthetic session; not production authentication."
+      }
+    },
+    "parameters": {
+      "OrderId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "minLength": 1, "maxLength": 80 }
+      }
+    },
+    "schemas": {
+      "DemoRole": {
+        "type": "string",
+        "enum": ["picker", "packer", "warehouse_manager"]
+      },
+      "DemoProfile": {
+        "type": "object",
+        "required": ["id", "role"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/DemoRole" },
+          "role": { "$ref": "#/components/schemas/DemoRole" }
+        },
+        "additionalProperties": false
+      },
+      "OrderStatus": {
+        "type": "string",
+        "enum": [
+          "accepted",
+          "allocated",
+          "picking",
+          "picked",
+          "packed",
+          "shipped",
+          "returned"
+        ]
+      },
+      "ReturnReason": {
+        "type": "string",
+        "enum": ["damaged", "wrong_item", "customer_changed_mind"]
+      },
+      "OrderItem": {
+        "type": "object",
+        "required": [
+          "sku",
+          "name",
+          "location",
+          "orderedQuantity",
+          "pickedQuantity"
+        ],
+        "properties": {
+          "sku": { "type": "string" },
+          "name": { "type": "string" },
+          "location": { "type": "string" },
+          "orderedQuantity": { "type": "integer", "minimum": 1 },
+          "pickedQuantity": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "OrderEvent": {
+        "type": "object",
+        "required": ["event", "label", "at", "actorRole"],
+        "properties": {
+          "event": { "type": "string" },
+          "label": { "type": "string" },
+          "at": { "type": "string", "format": "date-time" },
+          "actorRole": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/DemoRole" },
+              { "const": "system" }
+            ]
+          }
+        }
+      },
+      "FulfillmentOrder": {
+        "type": "object",
+        "required": [
+          "id",
+          "orderNumber",
+          "status",
+          "priority",
+          "channel",
+          "zone",
+          "promisedAt",
+          "createdAt",
+          "items",
+          "allocation",
+          "package",
+          "shipment",
+          "returnInfo",
+          "events",
+          "version"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "orderNumber": { "type": "string" },
+          "status": { "$ref": "#/components/schemas/OrderStatus" },
+          "priority": {
+            "type": "string",
+            "enum": ["expedite", "high", "standard"]
+          },
+          "channel": {
+            "type": "string",
+            "enum": ["direct", "marketplace", "store_transfer"]
+          },
+          "zone": { "type": "string" },
+          "promisedAt": { "type": "string", "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/OrderItem" }
+          },
+          "allocation": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["reference", "allocatedAt"],
+                "properties": {
+                  "reference": { "type": "string" },
+                  "allocatedAt": { "type": "string", "format": "date-time" }
+                }
+              },
+              { "type": "null" }
+            ]
+          },
+          "package": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["id", "packedAt"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "packedAt": { "type": "string", "format": "date-time" }
+                }
+              },
+              { "type": "null" }
+            ]
+          },
+          "shipment": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["carrier", "trackingNumber", "shippedAt"],
+                "properties": {
+                  "carrier": { "const": "ParcelPilot" },
+                  "trackingNumber": { "type": "string" },
+                  "shippedAt": { "type": "string", "format": "date-time" }
+                }
+              },
+              { "type": "null" }
+            ]
+          },
+          "returnInfo": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["reason", "createdAt"],
+                "properties": {
+                  "reason": { "$ref": "#/components/schemas/ReturnReason" },
+                  "createdAt": { "type": "string", "format": "date-time" }
+                }
+              },
+              { "type": "null" }
+            ]
+          },
+          "events": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/OrderEvent" }
+          },
+          "version": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "WorkflowSummary": {
+        "type": "object",
+        "required": ["openOrders", "readyToPick", "packedToday", "slaAtRisk"],
+        "properties": {
+          "openOrders": { "type": "integer", "minimum": 0 },
+          "readyToPick": { "type": "integer", "minimum": 0 },
+          "packedToday": { "type": "integer", "minimum": 0 },
+          "slaAtRisk": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "CreateSessionRequest": {
+        "type": "object",
+        "required": ["profileId"],
+        "properties": {
+          "profileId": { "$ref": "#/components/schemas/DemoRole" }
+        },
+        "additionalProperties": false
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": ["data", "requestId"],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": ["status"],
+            "properties": { "status": { "const": "ok" } }
+          },
+          "requestId": { "type": "string" }
+        }
+      },
+      "ProfileListResponse": {
+        "type": "object",
+        "required": ["data", "requestId"],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/DemoProfile" }
+          },
+          "requestId": { "type": "string" }
+        }
+      },
+      "SessionResponse": {
+        "type": "object",
+        "required": ["data", "requestId"],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": ["profile"],
+            "properties": {
+              "profile": { "$ref": "#/components/schemas/DemoProfile" }
+            }
+          },
+          "requestId": { "type": "string" }
+        }
+      },
+      "LogoutResponse": {
+        "type": "object",
+        "required": ["data", "requestId"],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": ["loggedOut"],
+            "properties": { "loggedOut": { "type": "boolean" } }
+          },
+          "requestId": { "type": "string" }
+        }
+      },
+      "SummaryResponse": {
+        "type": "object",
+        "required": ["data", "requestId"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/WorkflowSummary" },
+          "requestId": { "type": "string" }
+        }
+      },
+      "OrderListResponse": {
+        "type": "object",
+        "required": ["data", "requestId"],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FulfillmentOrder" }
+          },
+          "requestId": { "type": "string" }
+        }
+      },
+      "OrderResponse": {
+        "type": "object",
+        "required": ["data", "requestId"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/FulfillmentOrder" },
+          "requestId": { "type": "string" }
+        }
+      },
+      "WorkflowResult": {
+        "type": "object",
+        "required": ["order", "message", "replayed"],
+        "properties": {
+          "order": { "$ref": "#/components/schemas/FulfillmentOrder" },
+          "message": { "type": "string" },
+          "replayed": { "type": "boolean" }
+        }
+      },
+      "WorkflowResponse": {
+        "type": "object",
+        "required": ["data", "requestId"],
+        "properties": {
+          "data": { "$ref": "#/components/schemas/WorkflowResult" },
+          "requestId": { "type": "string" }
+        }
+      },
+      "OrderAction": {
+        "oneOf": [
+          { "$ref": "#/components/schemas/AllocateAction" },
+          { "$ref": "#/components/schemas/PickAction" },
+          { "$ref": "#/components/schemas/PackAction" },
+          { "$ref": "#/components/schemas/ShipAction" },
+          { "$ref": "#/components/schemas/ReturnAction" }
+        ],
+        "discriminator": { "propertyName": "action" }
+      },
+      "AllocateAction": {
+        "type": "object",
+        "required": ["action", "version"],
+        "properties": {
+          "action": { "const": "allocate" },
+          "version": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": false
+      },
+      "PickAction": {
+        "type": "object",
+        "required": ["action", "version", "sku", "quantity"],
+        "properties": {
+          "action": { "const": "pick" },
+          "version": { "type": "integer", "minimum": 1 },
+          "sku": { "type": "string", "maxLength": 40 },
+          "quantity": { "type": "integer", "minimum": 1, "maximum": 20 }
+        },
+        "additionalProperties": false
+      },
+      "PackAction": {
+        "type": "object",
+        "required": ["action", "version"],
+        "properties": {
+          "action": { "const": "pack" },
+          "version": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": false
+      },
+      "ShipAction": {
+        "type": "object",
+        "required": ["action", "version"],
+        "properties": {
+          "action": { "const": "ship" },
+          "version": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": false
+      },
+      "ReturnAction": {
+        "type": "object",
+        "required": ["action", "version", "reason"],
+        "properties": {
+          "action": { "const": "return" },
+          "version": { "type": "integer", "minimum": 1 },
+          "reason": { "$ref": "#/components/schemas/ReturnReason" }
+        },
+        "additionalProperties": false
+      },
+      "ApiError": {
+        "type": "object",
+        "required": ["code", "message", "requestId"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "requestId": { "type": "string" },
+          "details": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid request.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "A valid synthetic session is required.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "The session profile may not perform this action.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "The route or order was not found.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "The transition, version, or idempotency key conflicts with current state.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" }
+          }
+        }
+      }
+    }
+  }
+}
