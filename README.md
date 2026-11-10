@@ -1,5 +1,19 @@
 # FulfillOps Backend
 
+[Architecture guide](docs/architecture.md) — source map, workflows, contracts, data, security, and checks.
+
+## Repository layout and deployment boundary
+
+This independent repository owns FulfillOps's NestJS / TypeScript API and authoritative Process memory state. The UI is the separate [fulfillops-frontend](https://github.com/gopichand-retail-apps/fulfillops-frontend) repository. Keep the current directory names, Git histories, origins, and independent builds.
+
+The Vercel configuration belongs to the frontend only. This API has no verified Vercel deployment adapter. Process-local state is not durable and would split across instances. Do not deploy the local simulator as a public API or point it at real records.
+
+Use Node **24.15.0**, npm, and the committed package-lock.json. From the full Retail Apps workspace, `./scripts/Start-Apps.ps1 -App FulfillOps` uses the correct built/native entry after setup. From this repository alone, build with npm.cmd run build, then run node dist/src/main.js.
+
+Health: http://127.0.0.1:5202/api/v1/health. State resets on restart; there is no database to configure. The [API contract](openapi.json) and [canonical architecture](docs/architecture.md) describe the existing routes and trust boundaries. The architecture guide is inside this repository.
+
+Known release gaps: All server state resets on API restart. The archived production entry and browser command are incorrect for this Windows setup; use dist/src/main.js and the workspace E2E adapter. Real warehouse authorization and durable state remain absent.
+
 NestJS API for the FulfillOps warehouse workflow. This is an independent
 repository from `fulfillops-frontend`; open both in VS Code with
 `../FulfillOps.code-workspace`.
@@ -7,7 +21,7 @@ repository from `fulfillops-frontend`; open both in VS Code with
 ## Run
 
 ```bash
-npm install
+npm ci
 npm run start:dev
 ```
 
