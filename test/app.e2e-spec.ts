@@ -386,3 +386,41 @@ describe('FulfillOps API (e2e)', () => {
     await app.close();
   });
 });
+
+describe('FulfillOps API warehouse time zone setting (e2e)', () => {
+  const original = process.env.WAREHOUSE_TIME_ZONE;
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.WAREHOUSE_TIME_ZONE;
+    else process.env.WAREHOUSE_TIME_ZONE = original;
+  });
+
+  it('refuses to start when WAREHOUSE_TIME_ZONE is not an IANA zone', async () => {
+    process.env.WAREHOUSE_TIME_ZONE = 'Mars/Olympus';
+
+    await expect(
+      Test.createTestingModule({ imports: [AppModule] }).compile(),
+    ).rejects.toThrow('WAREHOUSE_TIME_ZONE must be a valid IANA time zone.');
+  });
+
+  it('serves the summary with a configured warehouse zone', async () => {
+    process.env.WAREHOUSE_TIME_ZONE = 'Pacific/Auckland';
+    const moduleFixture = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+    const app = moduleFixture.createNestApplication<INestApplication<App>>();
+    app.setGlobalPrefix('api/v1');
+    await app.init();
+
+    try {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/summary')
+        .expect(200);
+      expect(readData(response.body)).toMatchObject({
+        packedToday: expect.any(Number) as number,
+      });
+    } finally {
+      await app.close();
+    }
+  });
+});

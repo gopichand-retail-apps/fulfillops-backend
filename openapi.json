@@ -467,7 +467,11 @@
         "properties": {
           "openOrders": { "type": "integer", "minimum": 0 },
           "readyToPick": { "type": "integer", "minimum": 0 },
-          "packedToday": { "type": "integer", "minimum": 0 },
+          "packedToday": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Distinct packages first packed on today's date in the warehouse time zone (WAREHOUSE_TIME_ZONE, default UTC), across all orders."
+          },
           "slaAtRisk": { "type": "integer", "minimum": 0 }
         }
       },

@@ -30,12 +30,21 @@ npm run start:dev
 The API binds to `127.0.0.1:5202`. Health check:
 `GET http://127.0.0.1:5202/api/v1/health`.
 
+### Configuration
+
+The API reads these environment variables (see `.env.example`; no `.env` file is loaded automatically):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `5202` | Loopback port for the API. |
+| `WAREHOUSE_TIME_ZONE` | `UTC` | IANA zone (for example `America/New_York`) that defines "today" for the `packedToday` metric. An unknown zone stops startup instead of falling back to UTC. |
+
 ## API
 
 - `GET /api/v1/auth/profiles`
 - `POST /api/v1/auth/session`
 - `POST /api/v1/auth/logout`
-- `GET /api/v1/summary`
+- `GET /api/v1/summary` (metrics cover every order; `packedToday` counts distinct packages first packed on today's date in the warehouse time zone, including packages dispatched or returned later)
 - `GET /api/v1/orders?status=all&q=headphones&limit=50`
 - `GET /api/v1/orders/:id`
 - `GET /api/v1/returns`
