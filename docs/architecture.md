@@ -369,6 +369,13 @@ Previously recorded application verification:
 
 No additional per-app verification block existed in the source guide; refer to the original validation ledger.
 
+Stage B FUL-04 slice, 2026-11-26, branch `feature/ful-04-packed-today-and-keys`, Node 24.15.0 on Windows:
+
+- `npm.cmd run build`, `lint`, `format:check`, `validate:openapi` (9 paths, 51 references): passed.
+- `npm.cmd run test:cov`: 49 tests in 6 suites passed (includes the 17 HTTP tests); statements 100%, branches 94.47%, functions 100%, lines 100%. `npm.cmd run coverage:check`: passed, critical files meet 95%.
+- `npm.cmd run test:e2e`: 17 passed, including startup refusal of an unknown `WAREHOUSE_TIME_ZONE`.
+- Not run: `npm audit`, hosted CI, load or restart-durability checks (state is still in memory).
+
 ## 14. Extension rules and companion repository
 
 Start with [README.md](../README.md) and this guide. The companion repository is [fulfillops-frontend](https://github.com/gopichand-retail-apps/fulfillops-frontend); clone the pair as siblings when using the existing local integration/model contract. This guide is inside the current repository and does not depend on a parent-folder architecture file to exist.
