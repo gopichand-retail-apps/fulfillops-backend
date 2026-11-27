@@ -179,6 +179,21 @@ code; no password or customer record exists. Session tokens are random and
 stored as SHA-256 hashes with expirations. Order state, session state, and
 idempotency results reset when the API process restarts; there is no database.
 
+#### Summary metrics and "packed today" (FUL-04)
+
+`GET /summary` reads every order, not only the first page of 50, so
+`openOrders`, `readyToPick` and `slaAtRisk` do not change when the queue grows
+past one page. `packedToday` counts distinct `package.id` values whose
+`package.packedAt` falls on the current date in the warehouse time zone
+(`WAREHOUSE_TIME_ZONE`, an IANA name, default `UTC`, validated at startup).
+Status does not matter: a package packed today still counts after the order is
+shipped or returned, and a package packed before local midnight does not.
+The package keeps its first `packedAt`, so later actions do not move it
+between days. Day boundaries use `Intl.DateTimeFormat` in the configured zone,
+which follows daylight-saving changes. The rule is covered by
+`fulfillment-summary.spec.ts` (65 orders across local midnight) and
+`warehouse-day.spec.ts` (midnight and DST boundaries).
+
 ```mermaid
 erDiagram
     FULFILLMENT_ORDER ||--|{ ORDER_ITEM : contains
@@ -353,6 +368,13 @@ The baseline results below record earlier validation. Re-run the listed commands
 Previously recorded application verification:
 
 No additional per-app verification block existed in the source guide; refer to the original validation ledger.
+
+Stage B FUL-04 slice, 2026-11-26, branch `feature/ful-04-packed-today-and-keys`, Node 24.15.0 on Windows:
+
+- `npm.cmd run build`, `lint`, `format:check`, `validate:openapi` (9 paths, 51 references): passed.
+- `npm.cmd run test:cov`: 49 tests in 6 suites passed (includes the 17 HTTP tests); statements 100%, branches 94.47%, functions 100%, lines 100%. `npm.cmd run coverage:check`: passed, critical files meet 95%.
+- `npm.cmd run test:e2e`: 17 passed, including startup refusal of an unknown `WAREHOUSE_TIME_ZONE`.
+- Not run: `npm audit`, hosted CI, load or restart-durability checks (state is still in memory).
 
 ## 14. Extension rules and companion repository
 

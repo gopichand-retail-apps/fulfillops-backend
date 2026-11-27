@@ -3,7 +3,7 @@ import type { FulfillmentOrder, OrderStatus } from '../domain/order';
 export type OrderSearch = {
   status?: string;
   query?: string;
-  limit: number;
+  limit?: number;
 };
 
 export interface OrderRepository {
@@ -276,9 +276,13 @@ function seedOrders(): FulfillmentOrder[] {
 }
 
 export class InMemoryOrderRepository implements OrderRepository {
-  private readonly orders = new Map(
-    seedOrders().map((order) => [order.id, order]),
-  );
+  private readonly orders: Map<string, FulfillmentOrder>;
+
+  constructor(initialOrders: FulfillmentOrder[] = seedOrders()) {
+    this.orders = new Map(
+      initialOrders.map((order) => [order.id, structuredClone(order)]),
+    );
+  }
 
   findAll(search: OrderSearch): FulfillmentOrder[] {
     const normalizedQuery = search.query?.trim().toLowerCase();

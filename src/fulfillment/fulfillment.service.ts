@@ -5,6 +5,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import type {
@@ -16,11 +17,17 @@ import type {
   WorkflowSummary,
 } from './domain/order';
 import { DEMO_ROLES } from './domain/order';
+import {
+  DEFAULT_WAREHOUSE_TIME_ZONE,
+  warehouseDayKey,
+} from './domain/warehouse-day';
 import type { PerformOrderActionDto } from './dto/perform-order-action.dto';
 import type { OrderRepository } from './data/order.repository';
 import type { ListOrdersQueryDto } from './dto/list-orders-query.dto';
 
 export const ORDER_REPOSITORY = Symbol('ORDER_REPOSITORY');
+export const FULFILLMENT_OPTIONS = Symbol('FULFILLMENT_OPTIONS');
+export type FulfillmentOptions = { timeZone?: string; now?: () => number };
 const idempotencyKeyPattern = /^[A-Za-z0-9._:-]{8,128}$/;
 export const MAX_WORKFLOW_IDEMPOTENCY_ENTRIES = 1_000;
 export type PerformOrderActionCommand = {
@@ -49,9 +56,16 @@ export class FulfillmentService {
     { fingerprint: string; result: WorkflowResult }
   >();
 
+  private readonly timeZone: string;
+  private readonly now: () => number;
+
   constructor(
     @Inject(ORDER_REPOSITORY) private readonly orders: OrderRepository,
-  ) {}
+    @Optional() @Inject(FULFILLMENT_OPTIONS) options?: FulfillmentOptions,
+  ) {
+    this.timeZone = options?.timeZone ?? DEFAULT_WAREHOUSE_TIME_ZONE;
+    this.now = options?.now ?? Date.now;
+  }
 
   listOrders(query: ListOrdersQueryDto): FulfillmentOrder[] {
     return this.orders.findAll({
@@ -76,26 +90,39 @@ export class FulfillmentService {
   }
 
   getSummary(): WorkflowSummary {
-    const allOrders = this.orders.findAll({ limit: 50 });
+    const allOrders = this.orders.findAll({});
+    const now = this.now();
     const openOrders = allOrders.filter((order) =>
       ['accepted', 'allocated', 'picking', 'picked', 'packed'].includes(
         order.status,
       ),
     );
-    const atRiskCutoff = Date.now() + 60 * 60_000;
+    const atRiskCutoff = now + 60 * 60_000;
 
     return {
       openOrders: openOrders.length,
       readyToPick: allOrders.filter(
         (order) => order.status === 'allocated' || order.status === 'picking',
       ).length,
-      packedToday: allOrders.filter(
-        (order) => order.status === 'packed' || order.status === 'shipped',
-      ).length,
+      packedToday: this.countPackedToday(allOrders, now),
       slaAtRisk: openOrders.filter(
         (order) => Date.parse(order.promisedAt) <= atRiskCutoff,
       ).length,
     };
+  }
+
+  private countPackedToday(orders: FulfillmentOrder[], now: number): number {
+    const today = warehouseDayKey(now, this.timeZone);
+    const packageIds = new Set<string>();
+    for (const { package: packageInfo } of orders) {
+      if (
+        packageInfo &&
+        warehouseDayKey(packageInfo.packedAt, this.timeZone) === today
+      ) {
+        packageIds.add(packageInfo.id);
+      }
+    }
+    return packageIds.size;
   }
 
   performAction(command: PerformOrderActionCommand): WorkflowResult {
